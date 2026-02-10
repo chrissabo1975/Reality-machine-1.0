@@ -1,0 +1,9 @@
+mkdir prime-move-theory
+cd prime-move-theory
+# Save RealityEngine 1.0 spec as README.md
+# Save above code as reality_engine.py  
+git init
+git add .
+git commit -m "RealityEngine 1.0: Prime Move from nothingness"
+git remote add origin https://github.com/chrissabo1975/prime-move-theory.git
+git push -u origin main
