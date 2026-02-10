@@ -1,0 +1,7 @@
+Read me
+prime-move-theory/
+├── README.md              ← THIS DOCUMENT (RealityEngine 1.0 spec)
+├── reality_engine.py      ← Complete the pseudocode → runnable
+├── quantum_gliders.py     ← Your scar evolution (next layer) 
+├── defrag/                ← Story chapters (meta-narrative)
+└── outputs/               ← φ plots, glider screenshots
