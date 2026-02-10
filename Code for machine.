@@ -1,0 +1,67 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+class RealityEngine:
+    def __init__(self, width=50, height=50):
+        self.width, self.height = width, height
+        self.grid = self.initialize_grid()
+        self.MERGE_THRESHOLD = 0.5
+        self.DECAY_RATE = 0.95
+        self.DECAY_DELAY = 2
+        
+    def initialize_grid(self):
+        return {
+            'state': np.zeros((self.height, self.width), dtype=int),
+            'scar': np.zeros((self.height, self.width), dtype=float),
+            'potential': np.ones((self.height, self.width), dtype=float),
+            'age': np.zeros((self.height, self.width), dtype=int)
+        }
+    
+    def get_neighbors(self, x, y):
+        """Moore neighborhood with toroidal wrap"""
+        neighbors = []
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                if dx == 0 and dy == 0: continue
+                nx, ny = (x + dx) % self.height, (y + dy) % self.width
+                neighbors.append(self.grid['state'][nx, ny])
+        return neighbors
+    
+    def update_cell(self, x, y):
+        # SPLIT
+        if self.grid['state'][x, y] == 0 and self.grid['potential'][x, y] >= 1.0:
+            if np.random.random() < 0.01:
+                self.grid['state'][x, y] = 1
+                self.grid['potential'][x, y] = 0.0
+        
+        # TENSION
+        neighbors = self.get_neighbors(x, y)
+        avg_state = np.mean(neighbors)
+        tension = abs(self.grid['state'][x, y] - avg_state)
+        
+        # FAILED MERGE
+        if tension > self.MERGE_THRESHOLD:
+            residue = tension % self.MERGE_THRESHOLD
+            self.grid['scar'][x, y] += residue
+            self.grid['state'][x, y] += 1
+        
+        # DECAY
+        if self.grid['age'][x, y] > self.DECAY_DELAY:
+            self.grid['scar'][x, y] *= self.DECAY_RATE
+            self.grid['potential'][x, y] += (1 - self.DECAY_RATE) * self.grid['scar'][x, y]
+        
+        self.grid['age'][x, y] += 1
+    
+    def step(self):
+        for x in range(self.height):
+            for y in range(self.width):
+                self.update_cell(x, y)
+
+# Demo run
+engine = RealityEngine()
+scar_history = []
+for t in range(100):
+    engine.step()
+    scar_history.append(np.sum(engine.grid['scar']))
+
+print("Scar growth:", scar_history[-10:])  # Watch φ emerge
