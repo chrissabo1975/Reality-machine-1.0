@@ -1,0 +1,105 @@
+import numpy as np
+
+class RealityEngine:
+    def __init__(self, width=50, height=50):
+        self.width, self.height = width, height
+        self.grid = self.initialize_grid()
+        self.MERGE_THRESHOLD = 0.5
+        self.DECAY_RATE = 0.95
+        self.DECAY_DELAY = 2
+        self.SPLIT_PROB = 0.02  # Increased from 0.01 to 0.02 as suggested
+        
+    def initialize_grid(self):
+        grid = {
+            'state': np.zeros((self.height, self.width), dtype=int),
+            'scar': np.zeros((self.height, self.width), dtype=float),
+            'potential': np.ones((self.height, self.width), dtype=float),
+            'age': np.zeros((self.height, self.width), dtype=int)
+        }
+        # Add initial seed
+        sx = np.random.randint(0, self.height)
+        sy = np.random.randint(0, self.width)
+        grid['state'][sx, sy] = 1
+        grid['potential'][sx, sy] = 0.0
+        return grid
+    
+    def get_neighbors(self, x, y):
+        """Moore neighborhood with toroidal wrap"""
+        neighbors = []
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                if dx == 0 and dy == 0: continue
+                nx, ny = (x + dx) % self.height, (y + dy) % self.width
+                neighbors.append(self.grid['state'][nx, ny])
+        return neighbors
+    
+    def update_cell(self, x, y):
+        # SPLIT
+        if self.grid['state'][x, y] == 0 and self.grid['potential'][x, y] >= 1.0:
+            if np.random.random() < self.SPLIT_PROB:
+                self.grid['state'][x, y] = 1
+                self.grid['potential'][x, y] = 0.0
+        
+        # TENSION
+        neighbors = self.get_neighbors(x, y)
+        avg_state = np.mean(neighbors)
+        tension = abs(self.grid['state'][x, y] - avg_state)
+        
+        # FAILED MERGE
+        if tension > self.MERGE_THRESHOLD:
+            residue = tension % self.MERGE_THRESHOLD
+            self.grid['scar'][x, y] += residue
+            self.grid['state'][x, y] += 1
+        
+        # DECAY (fixed: calculate released before decaying scar)
+        if self.grid['age'][x, y] > self.DECAY_DELAY:
+            old_scar = self.grid['scar'][x, y]
+            released = (1 - self.DECAY_RATE) * old_scar
+            self.grid['scar'][x, y] *= self.DECAY_RATE
+            self.grid['potential'][x, y] += released
+        
+        self.grid['age'][x, y] += 1
+    
+    def step(self):
+        for x in range(self.height):
+            for y in range(self.width):
+                self.update_cell(x, y)
+
+# Demo run with longer simulation (1000 steps)
+engine = RealityEngine()
+scar_history = []
+ratios = []  # To track ratios for golden ratio check
+
+for t in range(1000):
+    engine.step()
+    total_scar = np.sum(engine.grid['scar'])
+    scar_history.append(total_scar)
+    if t > 0 and scar_history[t-1] > 0:
+        ratio = total_scar / scar_history[t-1]
+        ratios.append(ratio)
+
+# Print progress at intervals
+for t in range(100, 1001, 100):
+    if t <= len(scar_history) - 1:
+        total_scar = scar_history[t]
+        last_ratio_str = f"{ratios[t-1]:.4f}" if (t-1 < len(ratios)) else "N/A"
+        print(f"Step {t}: Total scar = {total_scar:.4f}, Last ratio = {last_ratio_str}")
+
+# Print last 20 scar values
+print("\nLast 20 scar values:")
+n = len(scar_history)
+for i in range(max(0, n-20), n):
+    print(f"Step {i}: Scar = {scar_history[i]:.4f}")
+
+# Print last 20 ratios
+print("\nLast 20 ratios (scar[t]/scar[t-1]):")
+m = len(ratios)
+for i in range(max(0, m-20), m):
+    print(f"Ratio at step {i+1}: {ratios[i]:.4f}")  # step t = i+1 since ratios start at t=1
+
+# Average ratio of last 100 ratios (if enough)
+if len(ratios) >= 100:
+    avg_last_100 = np.mean(ratios[-100:])
+    print(f"\nAverage ratio over last 100 steps: {avg_last_100:.4f}")
+else:
+    print("\nNot enough steps for average ratio calculation.")
