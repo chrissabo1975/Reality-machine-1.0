@@ -1,0 +1,18 @@
+import matplotlib.pyplot as plt
+
+# After simulation
+plt.figure(figsize=(8, 6))
+plt.imshow(engine.grid['scar'], cmap='inferno', interpolation='nearest')
+plt.colorbar(label='Scar (memory / history)')
+plt.title('RealityEngine 1.0 – Scar Field after 1000 steps')
+plt.axis('off')
+plt.show()
+
+# Optional: plot total scar over time
+plt.figure(figsize=(10, 4))
+plt.plot(scar_history)
+plt.title('Total Scar Accumulation')
+plt.xlabel('Step')
+plt.ylabel('Total Scar')
+plt.grid(True, alpha=0.3)
+plt.show()
