@@ -1,0 +1,164 @@
+REALITY MACHINE 4.0 import numpy as np
+import math
+
+class RealityEngine:
+    def __init__(self, width=50, height=50):
+        self.width, self.height = width, height
+        self.grid = self.initialize_grid()
+        self.MERGE_THRESHOLD = 0.3     # how sparse the neighborhood must be to favor merging/decay
+        self.DECAY_RATE = 0.618        # golden-ratio-like relaxation from scar back into potential
+        self.DECAY_DELAY = 3           # how many steps an active cell lives before decay effects
+        self.SPLIT_PROB = 0.25         # baseline probability of split when potential is high
+
+    def initialize_grid(self):
+        grid = {
+            'state': np.zeros((self.height, self.width), dtype=int),
+            'scar': np.zeros((self.height, self.width), dtype=float),
+            'potential': np.ones((self.height, self.width), dtype=float),
+            'age': np.zeros((self.height, self.width), dtype=int)
+        }
+        # seed a single active event
+        sx = np.random.randint(0, self.height)
+        sy = np.random.randint(0, self.width)
+        grid['state'][sx, sy] = 1
+        grid['potential'][sx, sy] = 0.0
+        return grid
+
+    def get_neighbors(self, x, y):
+        neighbors = []
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                if dx == 0 and dy == 0:
+                    continue
+                nx, ny = (x + dx) % self.height, (y + dy) % self.width
+                neighbors.append((nx, ny))
+        return neighbors
+
+    def step(self):
+        # synchronous update: read from self.grid, write into new_grid
+        new_grid = {
+            'state': self.grid['state'].copy(),
+            'scar': self.grid['scar'].copy(),
+            'potential': self.grid['potential'].copy(),
+            'age': self.grid['age'].copy(),
+        }
+
+        for x in range(self.height):
+            for y in range(self.width):
+                self.update_cell(x, y, new_grid)
+
+        self.grid = new_grid
+
+    def update_cell(self, x, y, new_grid):
+        state = self.grid['state'][x, y]
+        scar = self.grid['scar'][x, y]
+        potential = self.grid['potential'][x, y]
+        age = self.grid['age'][x, y]
+
+        neighbors_idx = self.get_neighbors(x, y)
+        neighbor_states = [self.grid['state'][nx, ny] for nx, ny in neighbors_idx]
+        local_density = np.mean(neighbor_states)  # 0..1, average neighbor activity
+
+        # Aging for active cells
+        if state == 1:
+            age += 1
+
+        # TENSION: adjust potential based on neighborhood density
+        # high density -> compress (lower potential), low density -> increase potential
+        potential_delta = (0.5 - local_density) * 0.2
+        potential = np.clip(potential + potential_delta, 0.0, 2.0)
+
+        # SPLIT: latent to active based on potential and scar bias
+        if state == 0 and potential >= 1.0:
+            bias = 1.0 / (1.0 + scar)  # more scar = less likely to split
+            if np.random.random() < self.SPLIT_PROB * bias:
+                state = 1
+                age = 0
+                # when a new event actualizes, spend potential and create a small scar
+                potential = 0.0
+                scar += 0.1
+
+        # DECAY: active cells eventually relax into potential + scar
+        if state == 1 and age > self.DECAY_DELAY:
+            # transfer a portion of scar back into potential
+            transfer = self.DECAY_RATE * scar
+            potential = np.clip(potential + transfer, 0.0, 2.0)
+            scar *= (1.0 - self.DECAY_RATE)
+            # small chance to fully decay (merge back to 0) in sparse regions
+            if local_density < self.MERGE_THRESHOLD and np.random.random() < 0.5:
+                state = 0
+                age = 0
+
+        # MERGE: isolated active cells tend to disappear, leaving memory
+        if state == 1 and local_density < self.MERGE_THRESHOLD:
+            # increase scar as a memory of isolation
+            scar += 0.05
+            if np.random.random() < 0.1:
+                state = 0
+                age = 0
+
+        # Write back to new_grid
+        new_grid['state'][x, y] = state
+        new_grid['scar'][x, y] = scar
+        new_grid['potential'][x, y] = potential
+        new_grid['age'][x, y] = age
+
+# Analysis tools
+def analyze_phi_behavior(steps=1000, width=50, height=50, seed=None):
+    if seed is not None:
+        np.random.seed(seed)
+
+    re = RealityEngine(width, height)
+    phi = (1 + 5 ** 0.5) / 2
+
+    ratios_pot_scar = []
+    ratios_active = []
+    prev_active = max(re.grid['state'].sum(), 1)
+
+    for t in range(steps):
+        re.step()
+
+        active = re.grid['state'].sum()
+        avg_scar = re.grid['scar'].mean()
+        avg_pot = re.grid['potential'].mean()
+
+        eps = 1e-6
+        r_pot_scar = avg_pot / (avg_scar + eps)
+        ratios_pot_scar.append(r_pot_scar)
+
+        r_active = active / (prev_active + eps)
+        ratios_active.append(r_active)
+        prev_active = max(active, 1)
+
+    def summary(name, data):
+        n = len(data)
+        mean_val = sum(data) / n if n > 0 else float('nan')
+        var = sum((x - mean_val) ** 2 for x in data) / n if n > 0 else float('nan')
+        std = math.sqrt(var)
+        print(f"\n{name}:")
+        print(f"  mean       = {mean_val:.6f}")
+        print(f"  std dev    = {std:.6f}")
+        print(f"  mean / phi = {mean_val / phi:.6f}")
+
+    print(f"phi ≈ {phi:.6f}")
+    summary("ratio avg_potential / avg_scar", ratios_pot_scar)
+    summary("ratio active_t / active_t-1", ratios_active)
+
+    sample_points = [0, 1, 2, 10, 100, 500, steps - 1]
+    print("\nSample points (t, r_pot_scar, r_active):")
+    for i in sample_points:
+        if 0 <= i < steps:
+            print(f"  t={i:4d}: {ratios_pot_scar[i]:.6f}, {ratios_active[i]:.6f}")
+
+# Quick test
+if __name__ == "__main__":
+    print("=== RealityEngine - Your Conway's Game of Life ===")
+    re = RealityEngine(10, 10)  # small grid for quick test
+    print("Initial active cells:", re.grid['state'].sum())
+    
+    for t in range(5):
+        re.step()
+        print(f"t={t+1}: active={re.grid['state'].sum()}, scar={re.grid['scar'].mean():.3f}, pot={re.grid['potential'].mean():.3f}")
+    
+    print("\nRun full analysis:")
+    analyze_phi_behavior(steps=100, seed=42)
