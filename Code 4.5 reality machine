@@ -1,0 +1,89 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+
+# States: 0=U (black), 1=S (red), 2=T (orange), 3=FM (yellow), 4=Sc (green), 5=D (blue)
+STATE_COLORS = ['#000000', '#e74c3c', '#f39c12', '#f1c40f', '#2ecc71', '#3498db']
+
+def init_grid(size=80):
+    grid = np.zeros((size, size, 3), dtype=int)  # [state, level, mature]
+    cx, cy = size//2, size//2
+    grid[cx, cy] = [0, 0, 0]  # Seed U at level 0
+    return grid
+
+def get_neighbors(grid, i, j):
+    size = grid.shape[0]
+    neighbors = []
+    for di in [-1,0,1]:
+        for dj in [-1,0,1]:
+            if di == 0 and dj == 0: continue
+            ni, nj = (i + di) % size, (j + dj) % size
+            neighbors.append(grid[ni, nj])
+    return neighbors
+
+def update_cell(cell, neighbors):
+    state, level, mature = cell
+    n_active = sum(1 for n in neighbors if n[0] != 0)
+    n_levels = [n[1] for n in neighbors if n[0] != 0]
+    
+    if state == 0:  # U
+        if n_active >= 1:
+            return [1, level, 0]  # Split
+        return cell
+    
+    if state == 1: return [2, level, mature]  # S → T
+    if state == 2:  # T → FM if tension
+        if n_active >= 2 or len(set(n_levels)) > 1:
+            return [3, level, mature]
+        return cell
+    if state == 3: return [4, level, mature]  # FM → Sc
+    if state == 4: return [5, level, mature]  # Sc → D
+    if state == 5:  # D
+        if mature == 0:
+            return [1, level, 1]  # Mature and back to S
+        else:
+            return [1, level, 1]  # Branch (level increase handled in update_grid)
+    return cell
+
+def update_grid(grid):
+    new_grid = grid.copy()
+    size = grid.shape[0]
+    for i in range(size):
+        for j in range(size):
+            cell = grid[i,j]
+            neighbors = get_neighbors(grid, i, j)
+            new_cell = update_cell(cell, neighbors)
+            new_grid[i,j] = new_cell
+            
+            # Branching: mature D promotes a random neighbor to k+1
+            if cell[0] == 5 and cell[2] == 1:  # Mature Decay
+                for _ in range(2):  # Branch 1-2 children
+                    ni, nj = (i + np.random.randint(-1,2)) % size, (j + np.random.randint(-1,2)) % size
+                    if new_grid[ni,nj,0] == 0:  # Only on empty
+                        new_grid[ni,nj] = [0, cell[1]+1, 0]  # New U at k+1
+    return new_grid
+
+# Visualization
+def animate(frame):
+    global grid
+    grid = update_grid(grid)
+    
+    img = np.zeros((grid.shape[0], grid.shape[1], 4))
+    for i in range(grid.shape[0]):
+        for j in range(grid.shape[1]):
+            s = grid[i,j,0]
+            lvl = grid[i,j,1]
+            color = plt.cm.tab10(s % 10)
+            img[i,j] = [*color[:3], min(0.4 + 0.12 * lvl, 1.0)]  # opacity = level
+    
+    im.set_array(img)
+    return [im]
+
+# Run it
+grid = init_grid(80)
+fig, ax = plt.subplots(figsize=(10,10))
+im = ax.imshow(np.zeros((80,80,4)))
+ax.set_xticks([]); ax.set_yticks([])
+
+ani = FuncAnimation(fig, animate, frames=200, interval=80, blit=True)
+plt.show()
