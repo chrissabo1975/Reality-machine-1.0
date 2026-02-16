@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Prime Move Life — Chris Sabo's Ladder</title>
+<style>
+    body { margin:0; background:#111; font-family: system-ui, sans-serif; color:#eee; text-align:center; }
+    canvas { image-rendering: pixelated; border: 2px solid #333; margin: 20px auto; display:block; background:#000; }
+    .controls { margin: 10px; display:flex; justify-content:center; gap:12px; flex-wrap:wrap; }
+    button, input { padding:8px 16px; font-size:16px; background:#222; color:#eee; border:none; border-radius:6px; cursor:pointer; }
+    button:hover { background:#444; }
+    .stats { font-family: monospace; font-size:14px; margin:10px; }
+    .info { max-width:800px; margin:20px auto; padding:0 20px; line-height:1.6; }
+</style>
+</head>
+<body>
+
+<h1>Prime Move Life</h1>
+<p><em>The five-beat ladder running live — watch it climb from linear to dendritic</em></p>
+
+<canvas id="canvas" width="640" height="640"></canvas>
+
+<div class="controls">
+    <button id="play">▶ Play</button>
+    <button id="pause">⏸ Pause</button>
+    <button id="clear">Clear</button>
+    <button id="random">Random Seed</button>
+    <label>Speed: <input type="range" id="speed" min="1" max="60" value="8"></label>
+</div>
+
+<div class="stats">
+    Step: <span id="step">0</span> | 
+    Scars: <span id="scars">0</span> | 
+    Max Level: <span id="maxlvl">0</span> | 
+    Ratio: <span id="ratio">—</span>
+</div>
+
+<div class="info">
+    <strong>How to use:</strong> Click on the grid to seed new U cells.<br>
+    Watch the ladder: linear → hierarchical → spiral → fractal → wave → dendritic.<br>
+    The scar ratio converges to φ ≈ 1.618.
+</div>
+
+<script>
+// =============================================
+// PRIME MOVE LIFE — Chris Sabo's Theory Engine
+// =============================================
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const SIZE = 64;                    // Grid size (64x64 is smooth)
+const SCALE = canvas.width / SIZE;  // Pixel size per cell
+
+// State: [state, level, mature]
+let grid = Array.from({length: SIZE}, () => 
+    Array.from({length: SIZE}, () => [0, 0, 0])
+);
+
+let running = true;
+let speed = 8;
+let step = 0;
+let scarHistory = [];
+
+// Colors: 0=U black, 1=S red, 2=T orange, 3=FM yellow, 4=Sc green, 5=D blue
+const colors = ['#111', '#e74c3c', '#f39c12', '#f1c40f', '#2ecc71', '#3498db'];
+
+function seed(x, y) {
+    if (x < 0 || x >= SIZE || y < 0 || y >= SIZE) return;
+    grid[y][x] = [0, 0, 0]; // New U
+}
+
+// Initialize with a small seed
+seed(SIZE/2, SIZE/2);
+seed(SIZE/2 + 3, SIZE/2);
+seed(SIZE/2, SIZE/2 + 3);
+
+function neighbors(x, y) {
+    const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+    let count = 0;
+    for (let [dx, dy] of dirs) {
+        let nx = (x + dx + SIZE) % SIZE;
+        let ny = (y + dy + SIZE) % SIZE;
+        if (grid[ny][nx][0] !== 0) count++;
+    }
+    return count;
+}
+
+function update() {
+    const newGrid = grid.map(row => row.map(cell => [...cell]));
+    
+    for (let y = 0; y < SIZE; y++) {
+        for (let x = 0; x < SIZE; x++) {
+            let [state, level, mature] = grid[y][x];
+            let n = neighbors(x, y);
+            
+            if (state === 0) { // U
+                if (n >= 1) newGrid[y][x] = [1, level, 0]; // Split
+            } else if (state === 1) { // S → T
+                newGrid[y][x] = [2, level, mature];
+            } else if (state === 2) { // T → FM
+                if (n >= 2) newGrid[y][x] = [3, level, mature];
+            } else if (state === 3) { // FM → Sc
+                newGrid[y][x] = [4, level, mature];
+            } else if (state === 4) { // Sc → D
+                newGrid[y][x] = [5, level, mature];
+            } else if (state === 5) { // D
+                if (mature === 0) {
+                    newGrid[y][x] = [1, level, 1]; // Mature
+                } else {
+                    // Branch: spawn child at k+1
+                    newGrid[y][x] = [1, level, 1];
+                    let dx = Math.floor(Math.random()*3)-1;
+                    let dy = Math.floor(Math.random()*3)-1;
+                    let nx = (x + dx + SIZE) % SIZE;
+                    let ny = (y + dy + SIZE) % SIZE;
+                    if (newGrid[ny][nx][0] === 0) {
+                        newGrid[ny][nx] = [0, level + 1, 0];
+                    }
+                }
+            }
+        }
+    }
+    grid = newGrid;
+    step++;
+}
+
+function draw() {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    let totalScars = 0;
+    let maxLevel = 0;
+    
+    for (let y = 0; y < SIZE; y++) {
+        for (let x = 0; x < SIZE; x++) {
+            let [state, level, mature] = grid[y][x];
+            if (state === 0) continue;
+            
+            totalScars += level;
+            maxLevel = Math.max(maxLevel, level);
+            
+            const alpha = Math.min(0.3 + level * 0.08, 1);
+            ctx.fillStyle = colors[state];
+            ctx.globalAlpha = alpha;
+            ctx.fillRect(x*SCALE, y*SCALE, SCALE, SCALE);
+        }
+    }
+    
+    // Update stats
+    document.getElementById('step').textContent = step;
+    document.getElementById('scars').textContent = totalScars;
+    document.getElementById('maxlvl').textContent = maxLevel;
+    
+    const ratio = scarHistory.length > 1 ? 
+        (totalScars / scarHistory[scarHistory.length-2]).toFixed(4) : '—';
+    document.getElementById('ratio').textContent = ratio;
+    
+    scarHistory.push(totalScars);
+    if (scarHistory.length > 100) scarHistory.shift();
+}
+
+function loop() {
+    if (running) {
+        for (let i = 0; i < speed; i++) update();
+        draw();
+    }
+    requestAnimationFrame(loop);
+}
+
+// Controls
+document.getElementById('play').onclick = () => running = true;
+document.getElementById('pause').onclick = () => running = false;
+document.getElementById('clear').onclick = () => {
+    grid = Array.from({length: SIZE}, () => Array.from({length: SIZE}, () => [0,0,0]));
+    step = 0;
+    scarHistory = [];
+};
+document.getElementById('random').onclick = () => {
+    for (let i = 0; i < 30; i++) {
+        const x = Math.floor(Math.random()*SIZE);
+        const y = Math.floor(Math.random()*SIZE);
+        seed(x, y);
+    }
+};
+
+document.getElementById('speed').oninput = (e) => speed = parseInt(e.target.value);
+
+canvas.onclick = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = Math.floor((e.clientX - rect.left) / SCALE);
+    const y = Math.floor((e.clientY - rect.top) / SCALE);
+    seed(x, y);
+};
+
+// Start
+loop();
+</script>
+</body>
+</html>
