@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Prime Move — Reality Engine</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Bebas+Neue&display=swap');
+
+```
+:root {
+  --void:    #000000;
+  --split:   #e63946;
+  --tension: #f4a261;
+  --merge:   #e9c46a;
+  --scar:    #2a9d8f;
+  --decay:   #457b9d;
+  --phi:     #a8dadc;
+  --text:    #f1faee;
+  --dim:     #556b7a;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--void);
+  color: var(--text);
+  font-family: 'Space Mono', monospace;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  touch-action: none;
+}
+
+/* ── Header ── */
+header {
+  padding: 8px 14px 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid #1a2a30;
+  flex-shrink: 0;
+}
+
+header h1 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.4rem;
+  letter-spacing: 3px;
+  color: var(--text);
+}
+
+header span {
+  font-size: 0.6rem;
+  color: var(--dim);
+  letter-spacing: 1px;
+}
+
+/* ── Canvas ── */
+#canvas {
+  flex: 1;
+  width: 100%;
+  display: block;
+  cursor: crosshair;
+}
+
+/* ── Stats Bar ── */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid #1a2a30;
+  border-bottom: 1px solid #1a2a30;
+  flex-shrink: 0;
+}
+
+.stat {
+  padding: 6px 8px;
+  border-right: 1px solid #1a2a30;
+  text-align: center;
+}
+
+.stat:last-child { border-right: none; }
+
+.stat-label {
+  font-size: 0.45rem;
+  color: var(--dim);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.stat-value {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+#phi-value { color: var(--phi); }
+
+/* ── Phi Convergence Bar ── */
+.phi-bar-wrap {
+  padding: 5px 14px;
+  background: #050d10;
+  flex-shrink: 0;
+}
+
+.phi-bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.5rem;
+  color: var(--dim);
+  margin-bottom: 3px;
+  letter-spacing: 1px;
+}
+
+.phi-bar-track {
+  height: 3px;
+  background: #1a2a30;
+  border-radius: 2px;
+  position: relative;
+  overflow: visible;
+}
+
+.phi-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--split), var(--phi));
+  border-radius: 2px;
+  transition: width 0.3s ease;
+  max-width: 100%;
+}
+
+.phi-marker {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 9px;
+  background: gold;
+  border-radius: 1px;
+}
+
+/* ── Controls ── */
+.controls {
+  display: flex;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+.controls button {
+  flex: 1;
+  padding: 12px 8px;
+  background: #0a1a20;
+  color: var(--text);
+  border: none;
+  border-right: 1px solid #1a2a30;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.65rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.controls button:last-child { border-right: none; }
+.controls button:active { background: #1a2a30; }
+.controls button.active { color: var(--phi); }
+
+/* ── Stage Legend ── */
+.legend {
+  display: flex;
+  padding: 5px 14px;
+  gap: 10px;
+  background: #050d10;
+  justify-content: center;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.45rem;
+  color: var(--dim);
+  letter-spacing: 0.5px;
+}
+
+.legend-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Overlay Toast ── */
+#toast {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0,0,0,0.85);
+  border: 1px solid var(--phi);
+  padding: 16px 24px;
+  font-size: 0.7rem;
+  letter-spacing: 2px;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s;
+  z-index: 99;
+  max-width: 80vw;
+}
+
+#toast.show { opacity: 1; }
+#toast strong { color: var(--phi); display: block; font-size: 1.1rem; margin-bottom: 4px; }
+```
+
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>PRIME MOVE</h1>
+  <span>REALITY ENGINE v1.0</span>
+</header>
+
+<canvas id="canvas"></canvas>
+
+<div class="stats">
+  <div class="stat">
+    <span class="stat-label">Step</span>
+    <span class="stat-value" id="step">0</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Scars</span>
+    <span class="stat-value" id="scars">0</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Depth</span>
+    <span class="stat-value" id="level">0</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">φ ratio</span>
+    <span class="stat-value" id="phi-value">—</span>
+  </div>
+</div>
+
+<div class="phi-bar-wrap">
+  <div class="phi-bar-label">
+    <span>0</span>
+    <span>φ CONVERGENCE</span>
+    <span>φ = 1.618</span>
+  </div>
+  <div class="phi-bar-track">
+    <div class="phi-bar-fill" id="phi-fill" style="width:0%"></div>
+    <div class="phi-marker" id="phi-marker" style="left:0%"></div>
+  </div>
+</div>
+
+<div class="controls">
+  <button id="playBtn" class="active">⏸ PAUSE</button>
+  <button id="seedBtn">✦ SEED</button>
+  <button id="resetBtn">↺ RESET</button>
+  <button id="speedBtn">1× SPD</button>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:var(--split)"></div> SPLIT</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--tension)"></div> TENSION</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--merge)"></div> MERGE</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--scar)"></div> SCAR</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--decay)"></div> DECAY</div>
+</div>
+
+<div id="toast"><strong id="toast-title"></strong><span id="toast-msg"></span></div>
+
+<script>
+// ── Config ──
+const SIZE   = 60;
+const SPEEDS = [1, 2, 4, 8];
+let speedIdx = 0;
+
+// Stage constants
+const VOID    = 0; // Nothing (no distinction)
+const SPLIT   = 1; // S — First distinction
+const TENSION = 2; // T — Relational imbalance
+const MERGE   = 3; // FM — Failed merge attempt
+const SCAR    = 4; // Sc — Persistent residue
+const DECAY   = 5; // D  — Release, enables next cycle
+
+// Colors per stage
+const STAGE_COLOR = [
+  null,           // VOID — transparent
+  '#e63946',      // SPLIT   — red
+  '#f4a261',      // TENSION — orange
+  '#e9c46a',      // MERGE   — yellow
+  '#2a9d8f',      // SCAR    — teal
+  '#457b9d',      // DECAY   — blue
+];
+
+const PHI = (1 + Math.sqrt(5)) / 2; // 1.618...
+
+// ── State ──
+let grid, step, running, totalScars, scarHistory;
+
+const canvas  = document.getElementById('canvas');
+const ctx     = canvas.getContext('2d');
+
+function resizeCanvas() {
+  canvas.width  = canvas.clientWidth  * window.devicePixelRatio;
+  canvas.height = canvas.clientHeight * window.devicePixelRatio;
+}
+resizeCanvas();
+window.addEventListener('resize', () => { resizeCanvas(); });
+
+// ── Grid helpers ──
+function makeGrid() {
+  return Array.from({ length: SIZE }, () =>
+    Array.from({ length: SIZE }, () => ({ state: VOID, level: 0, age: 0 }))
+  );
+}
+
+function seedGrid(g, cx, cy) {
+  // Seed a small cross-pattern of SPLIT cells
+  const pts = [[0,0],[0,2],[2,0],[-2,0],[0,-2],[1,1],[-1,-1]];
+  pts.forEach(([dy, dx]) => {
+    let y = ((cy + dy) + SIZE) % SIZE;
+    let x = ((cx + dx) + SIZE) % SIZE;
+    g[y][x] = { state: SPLIT, level: 0, age: 0 };
+  });
+}
+
+function reset() {
+  grid       = makeGrid();
+  step       = 0;
+  totalScars = 0;
+  scarHistory = [];
+  const cx = Math.floor(SIZE / 2);
+  const cy = Math.floor(SIZE / 2);
+  seedGrid(grid, cx, cy);
+  updateStats();
+}
+reset();
+
+// ── Neighbor count (Moore neighborhood, toroidal) ──
+function neighbors(g, x, y) {
+  let active = 0, maxLvl = 0;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const ny = (y + dy + SIZE) % SIZE;
+      const nx = (x + dx + SIZE) % SIZE;
+      const c  = g[ny][nx];
+      if (c.state !== VOID) { active++; maxLvl = Math.max(maxLvl, c.level); }
+    }
+  }
+  return { active, maxLvl };
+}
+
+// ── Core update ──
+function update() {
+  const next  = makeGrid();
+  let newScars = 0;
+
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const cell = grid[y][x];
+      const { state, level, age } = cell;
+      const { active, maxLvl } = neighbors(grid, x, y);
+
+      let ns = VOID, nl = level, na = age + 1;
+
+      if (state === VOID) {
+        // VOID → SPLIT: spontaneous distinction when neighbors active
+        if (active >= 2) {
+          ns = SPLIT;
+          nl = maxLvl;
+        }
+
+      } else if (state === SPLIT) {
+        // SPLIT → TENSION always
+        ns = TENSION;
+        nl = level;
+
+      } else if (state === TENSION) {
+        // TENSION → MERGE always (relational pressure builds)
+        ns = MERGE;
+        nl = level;
+
+      } else if (state === MERGE) {
+        // MERGE → SCAR (failed merge leaves residue)
+        ns   = SCAR;
+        nl   = level;
+        newScars++;
+
+      } else if (state === SCAR) {
+        // SCAR → DECAY
+        ns = DECAY;
+        nl = level;
+
+      } else if (state === DECAY) {
+        // DECAY — the generative branch point
+        // With some probability, spawn child at higher level
+        const mature = age >= 5; // maturation delay
+        if (mature && Math.random() < 0.15) {
+          // Branch: this cell decays to void, spawning SPLIT neighbor
+          ns = VOID;
+          nl = 0;
+          na = 0;
+          // Find empty neighbor for child
+          const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+          const d = dirs[Math.floor(Math.random() * dirs.length)];
+          const ny = (y + d[0] + SIZE) % SIZE;
+          const nx = (x + d[1] + SIZE) % SIZE;
+          if (next[ny][nx].state === VOID) {
+            next[ny][nx] = { state: SPLIT, level: Math.min(level + 1, 8), age: 0 };
+          }
+        } else {
+          // Continue cycle: return to SPLIT (self-perpetuation)
+          ns = SPLIT;
+          nl = level;
+        }
+      }
+
+      if (next[y][x].state === VOID || state !== VOID) {
+        next[y][x] = { state: ns, level: nl, age: na };
+      }
+    }
+  }
+
+  grid        = next;
+  totalScars += newScars;
+  scarHistory.push(totalScars);
+  if (scarHistory.length > 200) scarHistory.shift();
+  step++;
+}
+
+// ── Draw ──
+function draw() {
+  const W = canvas.width;
+  const H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const cw = W / SIZE;
+  const ch = H / SIZE;
+
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const { state, level } = grid[y][x];
+      if (state === VOID) continue;
+
+      const color = STAGE_COLOR[state];
+      if (!color) continue;
+
+      // Brightness by hierarchical level
+      const alpha = Math.min(0.25 + level * 0.12, 0.95);
+
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle   = color;
+      ctx.fillRect(
+        x * cw + 0.5,
+        y * ch + 0.5,
+        cw - 1,
+        ch - 1
+      );
+
+      // Scar cells get a subtle inner glow
+      if (state === SCAR) {
+        ctx.globalAlpha = alpha * 0.4;
+        ctx.fillStyle   = '#a8dadc';
+        ctx.fillRect(
+          x * cw + cw * 0.25,
+          y * ch + ch * 0.25,
+          cw * 0.5,
+          ch * 0.5
+        );
+      }
+    }
+  }
+
+  ctx.globalAlpha = 1;
+}
+
+// ── Stats ──
+function updateStats() {
+  document.getElementById('step').textContent  = step;
+  document.getElementById('scars').textContent = totalScars;
+
+  // Max level
+  let maxLvl = 0;
+  for (let y = 0; y < SIZE; y++)
+    for (let x = 0; x < SIZE; x++)
+      maxLvl = Math.max(maxLvl, grid[y][x].level);
+  document.getElementById('level').textContent = maxLvl;
+
+  // φ ratio (recent scar growth)
+  const h = scarHistory;
+  if (h.length >= 20) {
+    const recent = h.slice(-10);
+    let ratioSum = 0, ratioCount = 0;
+    for (let i = 1; i < recent.length; i++) {
+      if (recent[i - 1] > 0) {
+        ratioSum += recent[i] / recent[i - 1];
+        ratioCount++;
+      }
+    }
+    if (ratioCount > 0) {
+      const ratio = ratioSum / ratioCount;
+      document.getElementById('phi-value').textContent = ratio.toFixed(4);
+
+      // Map ratio to bar (0 → 3 range, golden at 1.618)
+      const pct      = Math.min((ratio / 3) * 100, 100);
+      const phiPct   = (PHI / 3) * 100;
+      document.getElementById('phi-fill').style.width   = pct + '%';
+      document.getElementById('phi-marker').style.left  = phiPct + '%';
+
+      // Celebrate convergence
+      if (Math.abs(ratio - PHI) < 0.01 && step % 100 === 0) {
+        showToast('φ CONVERGENCE', `ratio ${ratio.toFixed(4)} ≈ φ`);
+      }
+    }
+  } else {
+    document.getElementById('phi-value').textContent = '…';
+  }
+}
+
+// ── Toast ──
+let toastTimer;
+function showToast(title, msg) {
+  document.getElementById('toast-title').textContent = title;
+  document.getElementById('toast-msg').textContent   = msg;
+  const t = document.getElementById('toast');
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── Main Loop ──
+let lastTime = 0;
+function loop(ts) {
+  const spd = SPEEDS[speedIdx];
+  if (running && ts - lastTime > (120 / spd)) {
+    for (let i = 0; i < spd; i++) update();
+    draw();
+    updateStats();
+    lastTime = ts;
+  } else if (!running) {
+    draw(); // Keep drawing even when paused
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ── Controls ──
+document.getElementById('playBtn').onclick = () => {
+  running = !running;
+  document.getElementById('playBtn').textContent = running ? '⏸ PAUSE' : '▶ PLAY';
+  document.getElementById('playBtn').classList.toggle('active', running);
+};
+
+document.getElementById('resetBtn').onclick = () => {
+  reset();
+  showToast('RESET', 'back to undifferentiated unity');
+};
+
+document.getElementById('seedBtn').onclick = () => {
+  // Plant a random new seed anywhere
+  const cx = Math.floor(Math.random() * SIZE);
+  const cy = Math.floor(Math.random() * SIZE);
+  seedGrid(grid, cx, cy);
+  showToast('NEW SEED', `distinction forced at (${cx},${cy})`);
+};
+
+document.getElementById('speedBtn').onclick = () => {
+  speedIdx = (speedIdx + 1) % SPEEDS.length;
+  document.getElementById('speedBtn').textContent = SPEEDS[speedIdx] + '× SPD';
+};
+
+// ── Tap to seed ──
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const px   = (e.clientX - rect.left) / rect.width;
+  const py   = (e.clientY - rect.top)  / rect.height;
+  const cx   = Math.floor(px * SIZE);
+  const cy   = Math.floor(py * SIZE);
+  grid[cy][cx] = { state: SPLIT, level: 0, age: 0 };
+  showToast('SPLIT', `distinction at (${cx},${cy})`);
+});
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  const touch = e.touches[0];
+  const rect  = canvas.getBoundingClientRect();
+  const px    = (touch.clientX - rect.left) / rect.width;
+  const py    = (touch.clientY - rect.top)  / rect.height;
+  const cx    = Math.floor(px * SIZE);
+  const cy    = Math.floor(py * SIZE);
+  grid[cy][cx] = { state: SPLIT, level: 0, age: 0 };
+  showToast('SPLIT', `you forced a distinction`);
+}, { passive: false });
+</script>
+
+</body>
+</html>
